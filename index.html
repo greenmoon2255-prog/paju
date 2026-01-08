@@ -3,345 +3,76 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
-  <title>보이지 않는 물을 보라!</title>
+  <title>WebAR 버튼 진단</title>
   <style>
-    :root{
-      --bg:#0b1020; --panel:rgba(0,0,0,.65); --text:#f5f7ff;
-      --red:#ff3b30; --blue:#2f7dff;
+    body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:#0b1020;color:#f5f7ff}
+    .wrap{padding:16px}
+    .card{background:rgba(0,0,0,.55);border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:14px;margin-top:12px}
+    .build{font-weight:900;font-size:18px}
+    button{
+      width:100%;padding:16px;border-radius:999px;border:0;
+      background:rgba(47,125,255,.95);color:#fff;font-size:16px;font-weight:900;
+      margin-top:10px; cursor:pointer; touch-action:manipulation;
     }
-    *{box-sizing:border-box}
-    body{margin:0; overflow:hidden; background:var(--bg); color:var(--text);
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
-
-    .stage{position:fixed; inset:0; display:none; align-items:center; justify-content:center}
-    .stage.active{display:flex}
-
-    .panel{
-      width:min(560px,92vw);
-      padding:18px 16px;
-      border-radius:16px;
-      background:var(--panel);
-      backdrop-filter: blur(8px);
-      border:1px solid rgba(255,255,255,.12);
-    }
-    .warning{border:1px solid rgba(255,59,48,.35)}
-    .warning-title{font-weight:900;letter-spacing:.08em;color:var(--red);font-size:18px}
-    .warning-msg{font-size:20px;font-weight:900;margin-top:6px}
-    .sub{opacity:.9;margin:10px 0 14px 0}
-
-    .blink-dot{
-      width:10px;height:10px;border-radius:50%;
-      background:var(--red);
-      box-shadow:0 0 16px rgba(255,59,48,.9);
-      animation:blink 1s infinite;
-      margin-bottom:10px;
-    }
-    @keyframes blink{0%,50%{opacity:1}51%,100%{opacity:.15}}
-
-    .primary,.ghost{
-      width:100%;
-      border:0;
-      border-radius:999px;
-      padding:14px 16px;
-      font-size:16px;
-      margin-top:10px;
-      cursor:pointer;
-    }
-    .primary{background:rgba(47,125,255,.95);color:#fff}
-    .primary:disabled{opacity:.45; cursor:not-allowed}
-    .ghost{background:rgba(255,255,255,.08);color:#fff}
-
-    .footer-hint{
-      position:fixed;bottom:14px;left:0;right:0;
-      text-align:center;font-size:13px;opacity:.75;
-      padding:0 12px;
-    }
-
-    #cam{
-      position:fixed;inset:0;width:100%;height:100%;
-      object-fit:cover;background:#000;
-    }
-    #rain{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
-
-    #water{
-      position:fixed;left:0;right:0;bottom:0;height:0%;
-      background:linear-gradient(to top, rgba(47,125,255,.55), rgba(47,125,255,.15), rgba(47,125,255,0));
-      backdrop-filter: blur(1px);
-      pointer-events:none;
-      transition:height 8s linear;
-    }
-    .water-text{
-      position:absolute;left:16px;top:14px;
-      font-weight:900;text-shadow:0 2px 10px rgba(0,0,0,.6);
-    }
-
-    .hud{
-      position:fixed;top:12px;left:12px;
-      background:rgba(0,0,0,.45);
-      border:1px solid rgba(255,255,255,.12);
-      border-radius:14px;
-      padding:10px 12px;
-      backdrop-filter: blur(8px);
-    }
-    .hud-title{font-weight:900}
-    .hud-sub{opacity:.85;margin-top:2px}
-
-    .modal{
-      position:fixed;inset:0;
-      display:none;align-items:center;justify-content:center;
-      background:rgba(0,0,0,.45);
-      backdrop-filter: blur(6px);
-    }
-    .modal.open{display:flex}
-
-    .modal-card{
-      width:min(620px,92vw);
-      border-radius:18px;
-      padding:16px 16px 14px;
-      background:rgba(15,18,30,.92);
-      border:1px solid rgba(255,255,255,.12);
-    }
-    .modal-title{font-size:18px;font-weight:950;margin:6px 0 10px}
-    .modal-body{opacity:.95;line-height:1.55}
-    .row{display:flex;gap:10px;margin:8px 0}
-    .k{min-width:120px;opacity:.8}
-    .v{flex:1}
-
-    .shieldBig{font-size:44px; filter: drop-shadow(0 6px 18px rgba(47,125,255,.25));}
-    .pill{
-      display:inline-block;font-size:13px;opacity:.9;
-      padding:6px 10px;border-radius:999px;
-      background:rgba(255,255,255,.08);
-      border:1px solid rgba(255,255,255,.10);
-      margin:2px 0 10px;
-    }
-
-    .q-title{font-weight:900;margin-bottom:10px}
-    .opt{
-      display:flex; gap:10px; align-items:flex-start;
-      padding:10px 12px; border-radius:12px;
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.10);
-      margin:8px 0;
-    }
-    .opt input{margin-top:2px}
-    .feedback{margin-top:10px; min-height:22px; font-weight:900;}
-    .feedback.ok{color:#7CFF9A}
-    .feedback.bad{color:#FF7C7C}
-
-    .reward-card{text-align:center}
-    .rewardShield{
-      font-size:70px; margin:8px 0 6px;
-      animation: pop 650ms ease-out both;
-    }
-    @keyframes pop{0%{transform:scale(.2);opacity:0}70%{transform:scale(1.18);opacity:1}100%{transform:scale(1);opacity:1}}
+    button.secondary{background:rgba(255,255,255,.10)}
+    .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}
+    .ok{color:#7CFF9A;font-weight:900}
+    .bad{color:#FF7C7C;font-weight:900}
   </style>
 </head>
-
 <body>
-  <section id="stage1" class="stage active">
-    <div class="panel warning">
-      <div class="blink-dot" aria-hidden="true"></div>
-      <div class="warning-title">WARNING</div>
-      <div class="warning-msg">집중호우 시뮬레이션 가동</div>
-      <div id="geoStatus" class="sub">준비 중…</div>
-
-      <button id="startBtn" class="primary" type="button">
-        스캐너 시작 (카메라/위치 허용)
-      </button>
-
-      <button id="bypassBtn" class="ghost" type="button">
-        위치 확인이 안 되면(플랜B) 바로 시작
-      </button>
-    </div>
-    <div class="footer-hint">권한을 허용하면 카메라 위에 폭우/침수 시뮬레이션이 나타납니다.</div>
-  </section>
-
-  <section id="stage2" class="stage">
-    <video id="cam" playsinline muted autoplay></video>
-    <canvas id="rain"></canvas>
-    <div id="water"><div id="waterText" class="water-text">수위 상승…</div></div>
-    <div class="hud">
-      <div class="hud-title">[시뮬레이션] 시간당 100mm 폭우</div>
-      <div id="timer" class="hud-sub">00:00</div>
-    </div>
-  </section>
-
-  <div id="diagnosis" class="modal">
-    <div class="modal-card">
-      <div class="shieldBig">🛡️</div>
-      <div class="modal-title">[시스템 진단 결과]</div>
-      <div class="modal-body">
-        <div class="row"><span class="k">상황</span><span class="v">시간당 100mm 기록적 폭우 발생!</span></div>
-        <div class="row"><span class="k">운정호수 상태</span><span class="v">빗물 <b id="retentionText">약 30만 톤</b> 저류 성공! (스펀지 모드 작동 중)</span></div>
-        <div class="row"><span class="k">결과</span><span class="v">주변 침수 방어 완료. <b>안전합니다.</b></span></div>
+  <div class="wrap">
+    <div class="card">
+      <div class="build">BUILD: 2026-01-08-A</div>
+      <div style="opacity:.85;margin-top:6px">
+        이 문구가 보이면 “최신 index.html”이 실제로 배포된 것입니다.
       </div>
-      <button id="quizBtn" class="primary" type="button">퀴즈하기 (복불복 1문항)</button>
-      <button id="closeDiagnosisBtn" class="ghost" type="button">닫기</button>
     </div>
-  </div>
 
-  <div id="quiz" class="modal">
-    <div class="modal-card">
-      <div class="modal-title">그린인프라 퀴즈</div>
-      <div class="pill">문항/보기는 랜덤입니다.</div>
+    <div class="card">
+      <div id="status" class="ok">JS 로딩됨 ✅</div>
+      <div style="opacity:.85;margin-top:6px">아래 버튼을 눌렀을 때 숫자가 올라가면 “클릭 자체는 정상”입니다.</div>
 
-      <form id="quizForm">
-        <div class="modal-body">
-          <div id="qTitle" class="q-title">문제 로딩 중…</div>
-          <div id="options"></div>
-          <div id="quizFeedback" class="feedback"></div>
-        </div>
-        <button class="primary" type="submit">제출</button>
-        <button id="closeQuizBtn" class="ghost" type="button">닫기</button>
-      </form>
+      <button id="btn1" type="button">테스트 버튼 1 (카운트 증가)</button>
+      <button id="btn2" class="secondary" type="button">테스트 버튼 2 (alert 띄우기)</button>
+
+      <div style="margin-top:10px;opacity:.9">클릭 카운트: <b id="count">0</b></div>
     </div>
-  </div>
 
-  <div id="reward" class="modal">
-    <div class="modal-card reward-card">
-      <div class="rewardShield">🛡️</div>
-      <div class="modal-title">방패 획득!</div>
-      <div id="rewardMsg" class="modal-body">잘했어요.</div>
-      <button id="rewardOkBtn" class="primary" type="button">확인</button>
+    <div class="card">
+      <div style="font-weight:900">에러/로그</div>
+      <div id="log" class="mono" style="margin-top:8px;opacity:.95"></div>
     </div>
   </div>
 
   <script>
-    // === 설정 ===
-    const CONFIG = { floodSeconds: 8, diagnoseAtSeconds: 9 };
+    const logEl = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const countEl = document.getElementById('count');
+    let c = 0;
 
-    // === DOM ===
-    const stage1 = document.getElementById("stage1");
-    const stage2 = document.getElementById("stage2");
-    const geoStatus = document.getElementById("geoStatus");
-    const startBtn = document.getElementById("startBtn");
-    const bypassBtn = document.getElementById("bypassBtn");
-
-    const cam = document.getElementById("cam");
-    const rainCanvas = document.getElementById("rain");
-    const water = document.getElementById("water");
-    const waterText = document.getElementById("waterText");
-    const timerEl = document.getElementById("timer");
-
-    const diagnosis = document.getElementById("diagnosis");
-    const retentionText = document.getElementById("retentionText");
-    const quizBtn = document.getElementById("quizBtn");
-    const closeDiagnosisBtn = document.getElementById("closeDiagnosisBtn");
-
-    const quiz = document.getElementById("quiz");
-    const quizForm = document.getElementById("quizForm");
-    const qTitle = document.getElementById("qTitle");
-    const optionsBox = document.getElementById("options");
-    const quizFeedback = document.getElementById("quizFeedback");
-    const closeQuizBtn = document.getElementById("closeQuizBtn");
-
-    const reward = document.getElementById("reward");
-    const rewardMsg = document.getElementById("rewardMsg");
-    const rewardOkBtn = document.getElementById("rewardOkBtn");
-
-    // === 랜덤 데이터 ===
-    const RETENTION_VARIANTS = ["약 30만 톤","약 28만 톤","약 32만 톤","약 25만 톤","약 35만 톤"];
-    const WATER_TEXT_VARIANTS = ["수위 상승… 산책로 침수 위험!","배수 한계 접근… 하수관이 버티는 중!","우수 유출 급증… 주변 저지대 주의!"];
-    const REWARD_MESSAGES = [
-      "정답! 그린인프라는 빗물을 ‘천천히’ 모으고 스며들게 합니다.",
-      "좋아요! ‘스며들 틈(침투)’이 많을수록 홍수 위험이 줄어요.",
-      "멋집니다. 빗물정원·투수블록·식생수로가 이런 역할을 합니다."
-    ];
-    const QUESTION_BANK = [
-      {
-        q: "도시에서 비가 오면 물이 빨리 넘치는 가장 큰 이유는 무엇일까요?",
-        options: ["비가 더러워서","콘크리트·아스팔트가 많아 물이 스며들 틈이 적어서","바람이 많이 불어서","나무가 너무 많아서"],
-        correct: "콘크리트·아스팔트가 많아 물이 스며들 틈이 적어서",
-        ok: "정답! 땅이 물을 흡수하지 못하면 빗물이 한꺼번에 몰려요.",
-        bad:"오답이에요. 핵심은 ‘스며들 틈’이 부족하다는 점입니다."
-      },
-      {
-        q: "다음 중 ‘그린인프라(저영향개발)’에 가장 가까운 것은 무엇일까요?",
-        options: ["빗물을 바로 하수관으로 보내는 큰 관","빗물정원처럼 물을 잠깐 모아두고 스며들게 하는 공간","비가 오면 켜지는 사이렌","주차장을 더 단단하게 포장하기"],
-        correct: "빗물정원처럼 물을 잠깐 모아두고 스며들게 하는 공간",
-        ok:"정답! 그린인프라는 현장에서 저류·침투로 부담을 줄여요.",
-        bad:"오답이에요. 물을 모아두고 스며들게 하는 공간이 핵심입니다."
-      },
-      {
-        q: "그린인프라가 홍수 위험을 줄이는 방식으로 알맞은 것은 무엇일까요?",
-        options: ["물을 더 빨리 흘려보낸다","물을 천천히 모으고 스며들게 하고 저장해 하수관 부담을 줄인다","비를 멈추게 한다","강을 무조건 더 깊게 판다"],
-        correct: "물을 천천히 모으고 스며들게 하고 저장해 하수관 부담을 줄인다",
-        ok:"정답! ‘천천히(지연)+스며듦(침투)+저장(저류)’이 핵심이에요.",
-        bad:"오답이에요. ‘천천히 모으고 스며들게’가 핵심입니다."
-      }
-    ];
-
-    const pickOne = (arr)=>arr[Math.floor(Math.random()*arr.length)];
-    const shuffle = (arr)=>{
-      const a=[...arr];
-      for(let i=a.length-1;i>0;i--){
-        const j=Math.floor(Math.random()*(i+1));
-        [a[i],a[j]]=[a[j],a[i]];
-      }
-      return a;
-    };
-
-    // === 1단계 안내 ===
-    geoStatus.textContent = "시작 버튼을 눌러 진행하세요. (GPS 게이트는 생략했습니다)";
-
-    // === 카메라/연출 ===
-    async function startCamera(){
-      const stream = await navigator.mediaDevices.getUserMedia({ video:{facingMode:"environment"}, audio:false });
-      cam.srcObject = stream;
-      await cam.play();
-    }
-    function showStage2(){
-      stage1.classList.remove("active");
-      stage2.classList.add("active");
-    }
-    function startTimer(){
-      const t0=Date.now();
-      const t=setInterval(()=>{
-        const sec=Math.floor((Date.now()-t0)/1000);
-        const mm=String(Math.floor(sec/60)).padStart(2,"0");
-        const ss=String(sec%60).padStart(2,"0");
-        timerEl.textContent=`${mm}:${ss}`;
-      },250);
-      setTimeout(()=>clearInterval(t),60000);
-    }
-    function startWaterRise(){
-      waterText.textContent = pickOne(WATER_TEXT_VARIANTS);
-      setTimeout(()=>{
-        water.style.transition = `height ${CONFIG.floodSeconds}s linear`;
-        water.style.height="55%";
-      },400);
-    }
-    function openDiagnosis(){
-      retentionText.textContent = pickOne(RETENTION_VARIANTS);
-      diagnosis.classList.add("open");
+    function log(msg){
+      logEl.textContent += msg + "\\n";
     }
 
-    // 비(캔버스)
-    let rainRunning=false;
-    function startRain(){
-      const ctx = rainCanvas.getContext("2d");
-      function resize(){
-        const dpr=window.devicePixelRatio||1;
-        rainCanvas.width=Math.floor(window.innerWidth*dpr);
-        rainCanvas.height=Math.floor(window.innerHeight*dpr);
-        rainCanvas.style.width=window.innerWidth+"px";
-        rainCanvas.style.height=window.innerHeight+"px";
-        ctx.setTransform(dpr,0,0,dpr,0,0);
-      }
-      resize();
-      window.addEventListener("resize", resize);
+    window.addEventListener('error', (e)=>{
+      statusEl.textContent = "JS 에러 발생 ❌";
+      statusEl.className = "bad";
+      log("[ERROR] " + (e.message || e.error));
+    });
 
-      const drops=[];
-      const COUNT=220;
-      for(let i=0;i<COUNT;i++){
-        drops.push({x:Math.random()*window.innerWidth,y:Math.random()*window.innerHeight,len:8+Math.random()*16,spd:12+Math.random()*26,a:0.22+Math.random()*0.35});
-      }
-      rainRunning=true;
-      (function loop(){
-        if(!rainRunning) return;
-        ctx.clearRect(0,0,window.innerWidth,window.innerHeight);
-        ctx.lineWidth=1.2;
-        for(const d of drops){
-          ctx.strokeStyle=`rgba(200,220,255,${d.a})`;
-          ctx.beginPath(); ctx.moveTo(d.x,d.y); ctx.lineTo(d.x+1.2,d.y+d.len); ctx.stroke();
+    document.getElementById('btn1').addEventListener('click', ()=>{
+      c += 1;
+      countEl.textContent = String(c);
+      log("[CLICK] btn1 ok, count=" + c);
+    });
+
+    document.getElementById('btn2').addEventListener('click', ()=>{
+      log("[CLICK] btn2 ok (alert 시도)");
+      alert("클릭이 정상 동작합니다.");
+    });
+
+    log("[INFO] script 실행 시작");
+  </script>
+</body>
+</html>
