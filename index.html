@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+  <title>보이지 않는 물을 보라!</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <!-- 단계1: 경고 UI -->
+  <div id="stage1" class="stage active">
+    <div class="panel warning">
+      <div class="blink-dot" aria-hidden="true"></div>
+      <div class="warning-title">WARNING</div>
+      <div class="warning-msg">집중호우 시뮬레이션 가동</div>
+      <div id="geoStatus" class="sub">위치 확인 중…</div>
+
+      <button id="startBtn" class="primary" disabled>
+        스캐너 시작 (카메라/위치 허용)
+      </button>
+
+      <button id="bypassBtn" class="ghost">
+        위치 확인이 안 되면(플랜B) 바로 시작
+      </button>
+    </div>
+    <div class="footer-hint">
+      전망데크/제방 근처에서 실행하세요. (권한을 허용해야 작동합니다)
+    </div>
+  </div>
+
+  <!-- 단계2: 카메라 + 이펙트 -->
+  <div id="stage2" class="stage">
+    <video id="cam" playsinline muted autoplay></video>
+
+    <!-- 비(캔버스) -->
+    <canvas id="rain"></canvas>
+
+    <!-- 물 상승 레이어 -->
+    <div id="water">
+      <div class="water-text">수위 상승… 산책로 침수 위험!</div>
+    </div>
+
+    <!-- 상단 상태바 -->
+    <div class="hud">
+      <div class="hud-title">[시뮬레이션] 시간당 100mm 폭우</div>
+      <div id="timer" class="hud-sub">00:00</div>
+    </div>
+  </div>
+
+  <!-- 단계3: 진단 팝업 -->
+  <div id="stage3" class="modal">
+    <div class="modal-card">
+      <div class="shield">🛡️</div>
+      <div class="modal-title">[시스템 진단 결과]</div>
+
+      <div class="modal-body">
+        <div class="row"><span class="k">상황</span><span class="v">시간당 100mm 기록적 폭우 발생!</span></div>
+        <div class="row"><span class="k">운정호수 상태</span><span class="v">빗물 <b id="retentionText">약 30만 톤</b> 저류 성공! (스펀지 모드 작동 중)</span></div>
+        <div class="row"><span class="k">결과</span><span class="v">주변 아파트·도로 침수 방어 완료. <b>안전합니다.</b></span></div>
+      </div>
+
+      <button id="quizBtn" class="primary">퀴즈하기</button>
+      <button id="closeBtn" class="ghost">닫기</button>
+    </div>
+  </div>
+
+  <!-- 퀴즈(여기서는 자리만) -->
+  <div id="quiz" class="modal">
+    <div class="modal-card">
+      <div class="modal-title">그린인프라 퀴즈(예시)</div>
+      <div class="modal-body">
+        Q. 그린인프라는 빗물을 어떻게 도울까요?<br/>
+        ( ) 빨리 하수관으로 보낸다<br/>
+        ( ) 천천히 모으고 스며들게 한다
+      </div>
+      <button class="primary" onclick="alert('정답 처리/다음 문항은 여기서 확장!')">제출</button>
+      <button class="ghost" onclick="document.getElementById('quiz').classList.remove('open')">닫기</button>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
