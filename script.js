@@ -1,195 +1,158 @@
-// ====== 설정(여기만 바꾸면 됨) ======
-const CONFIG = {
-  // 운정호수 "미션 시작 지점" 좌표로 바꾸세요 (전망데크/제방 등)
-  targetLat: 37.7260,
-  targetLon: 126.7430,
-  radiusM: 180,           // 위치 오차 대비 반경(권장 120~250m)
-  retentionText: "약 30만 톤",
-
-  // 연출 타이밍
-  floodSeconds: 8,        // 물이 차오르는 시간(초)
-  diagnoseAtSeconds: 9    // 진단 팝업 띄우는 시점(초)
-};
-
-// ====== DOM ======
-const stage1 = document.getElementById("stage1");
-const stage2 = document.getElementById("stage2");
-const stage3 = document.getElementById("stage3");
-const quiz = document.getElementById("quiz");
-
-const geoStatus = document.getElementById("geoStatus");
-const startBtn = document.getElementById("startBtn");
-const bypassBtn = document.getElementById("bypassBtn");
-
-const cam = document.getElementById("cam");
-const rainCanvas = document.getElementById("rain");
-const water = document.getElementById("water");
-const timerEl = document.getElementById("timer");
-
-document.getElementById("retentionText").textContent = CONFIG.retentionText;
-
-const quizBtn = document.getElementById("quizBtn");
-const closeBtn = document.getElementById("closeBtn");
-
-// ====== 유틸: 거리 계산(하버사인) ======
-function toRad(d){ return d * Math.PI / 180; }
-function haversineMeters(lat1, lon1, lat2, lon2){
-  const R = 6371000;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat/2)**2 +
-            Math.cos(toRad(lat1))*Math.cos(toRad(lat2))*(Math.sin(dLon/2)**2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c;
+:root{
+  --bg:#0b1020;
+  --panel:rgba(0,0,0,.65);
+  --text:#f5f7ff;
+  --red:#ff3b30;
+  --blue:#2f7dff;
 }
 
-// ====== 단계1: 위치 확인 ======
-async function checkGeo(){
-  if (!("geolocation" in navigator)){
-    geoStatus.textContent = "이 기기/브라우저는 위치 기능을 지원하지 않아요. 플랜B로 진행하세요.";
-    return;
-  }
-
-  geoStatus.textContent = "위치 권한을 허용해주세요…";
-  navigator.geolocation.getCurrentPosition(
-    (pos) => {
-      const {latitude, longitude, accuracy} = pos.coords;
-      const d = haversineMeters(latitude, longitude, CONFIG.targetLat, CONFIG.targetLon);
-      const ok = d <= CONFIG.radiusM;
-
-      geoStatus.textContent =
-        `현재 위치 정확도 ±${Math.round(accuracy)}m / 미션 지점까지 ${Math.round(d)}m`;
-
-      startBtn.disabled = !ok;
-      if (!ok){
-        startBtn.textContent = "지정 장소에 가까이 가면 시작됩니다";
-      } else {
-        startBtn.textContent = "스캐너 시작 (카메라/위치 허용)";
-      }
-    },
-    (err) => {
-      geoStatus.textContent = `위치 권한/수신 실패: ${err.message} (플랜B로 진행 가능)`;
-    },
-    { enableHighAccuracy:true, timeout:12000, maximumAge:0 }
-  );
+*{box-sizing:border-box}
+body{
+  margin:0; overflow:hidden;
+  background:var(--bg); color:var(--text);
+  font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
 }
 
-checkGeo();
+.stage{position:fixed; inset:0; display:none; align-items:center; justify-content:center}
+.stage.active{display:flex}
 
-// 10초마다 재확인(현장 이동 반영)
-setInterval(checkGeo, 10000);
+.panel{
+  width:min(560px,92vw);
+  padding:18px 16px;
+  border-radius:16px;
+  background:var(--panel);
+  backdrop-filter: blur(8px);
+  border:1px solid rgba(255,255,255,.12);
+}
+.warning{border:1px solid rgba(255,59,48,.35)}
+.warning-title{font-weight:900;letter-spacing:.08em;color:var(--red);font-size:18px}
+.warning-msg{font-size:20px;font-weight:900;margin-top:6px}
+.sub{opacity:.9;margin:10px 0 14px 0}
 
-// ====== 단계2: 카메라 시작 + 연출 ======
-async function startSimulation(){
-  // 1) 카메라 권한
-  try{
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "environment" },
-      audio: false
-    });
-    cam.srcObject = stream;
-    await cam.play();
-  }catch(e){
-    alert("카메라 권한이 필요합니다. 브라우저 설정에서 카메라 허용 후 다시 시도하세요.");
-    return;
-  }
+.blink-dot{
+  width:10px;height:10px;border-radius:50%;
+  background:var(--red);
+  box-shadow:0 0 16px rgba(255,59,48,.9);
+  animation:blink 1s infinite;
+  margin-bottom:10px;
+}
+@keyframes blink{0%,50%{opacity:1}51%,100%{opacity:.15}}
 
-  // 화면 전환
-  stage1.classList.remove("active");
-  stage2.classList.add("active");
+.primary,.ghost{
+  width:100%;
+  border:0;
+  border-radius:999px;
+  padding:14px 16px;
+  font-size:16px;
+  margin-top:10px;
+}
+.primary{background:rgba(47,125,255,.95);color:#fff}
+.primary:disabled{opacity:.45}
+.ghost{background:rgba(255,255,255,.08);color:#fff}
 
-  // 비 캔버스 시작
-  startRain();
-
-  // 물 차오르기 시작(transition)
-  // 약간 딜레이를 주면 연출이 더 자연스러움
-  setTimeout(() => {
-    water.style.height = "55%";
-  }, 400);
-
-  // 타이머 표시
-  const t0 = Date.now();
-  const timer = setInterval(() => {
-    const sec = Math.floor((Date.now()-t0)/1000);
-    const mm = String(Math.floor(sec/60)).padStart(2,"0");
-    const ss = String(sec%60).padStart(2,"0");
-    timerEl.textContent = `${mm}:${ss}`;
-  }, 250);
-
-  // 단계3 진단 팝업
-  setTimeout(() => {
-    stage3.classList.add("open");
-  }, CONFIG.diagnoseAtSeconds * 1000);
-
-  // (옵션) 특정 시간이 지나면 타이머 멈춤
-  setTimeout(() => clearInterval(timer), 60_000);
+.footer-hint{
+  position:fixed;bottom:14px;left:0;right:0;
+  text-align:center;font-size:13px;opacity:.75;
+  padding:0 12px;
 }
 
-startBtn.addEventListener("click", startSimulation);
-bypassBtn.addEventListener("click", startSimulation);
+#cam{
+  position:fixed;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;
+  background:#000;
+}
+#rain{position:fixed;inset:0;width:100%;height:100%;pointer-events:none}
 
-// ====== 단계3 버튼들 ======
-quizBtn.addEventListener("click", () => {
-  stage3.classList.remove("open");
-  quiz.classList.add("open");
-});
+#water{
+  position:fixed;left:0;right:0;bottom:0;
+  height:0%;
+  background:linear-gradient(to top, rgba(47,125,255,.55), rgba(47,125,255,.15), rgba(47,125,255,0));
+  backdrop-filter: blur(1px);
+  pointer-events:none;
+  transition:height 8s linear;
+}
+.water-text{
+  position:absolute;left:16px;top:14px;
+  font-weight:900;text-shadow:0 2px 10px rgba(0,0,0,.6);
+}
 
-closeBtn.addEventListener("click", () => {
-  stage3.classList.remove("open");
-});
+.hud{
+  position:fixed;top:12px;left:12px;
+  background:rgba(0,0,0,.45);
+  border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;
+  padding:10px 12px;
+  backdrop-filter: blur(8px);
+}
+.hud-title{font-weight:900}
+.hud-sub{opacity:.85;margin-top:2px}
 
-// ====== 비(파티클) 효과: 가벼운 캔버스 ======
-let rainRunning = false;
-function startRain(){
-  const ctx = rainCanvas.getContext("2d");
-  resizeCanvas();
+.modal{
+  position:fixed;inset:0;
+  display:none;align-items:center;justify-content:center;
+  background:rgba(0,0,0,.45);
+  backdrop-filter: blur(6px);
+}
+.modal.open{display:flex}
 
-  const drops = [];
-  const COUNT = 260; // 태블릿 성능에 따라 160~320 조정
+.modal-card{
+  width:min(620px,92vw);
+  border-radius:18px;
+  padding:16px 16px 14px;
+  background:rgba(15,18,30,.92);
+  border:1px solid rgba(255,255,255,.12);
+}
+.modal-title{font-size:18px;font-weight:950;margin:6px 0 10px}
+.modal-body{opacity:.95;line-height:1.55}
 
-  for(let i=0;i<COUNT;i++){
-    drops.push({
-      x: Math.random()*rainCanvas.width,
-      y: Math.random()*rainCanvas.height,
-      len: 8 + Math.random()*14,
-      spd: 12 + Math.random()*22,
-      a: 0.25 + Math.random()*0.35
-    });
-  }
+.row{display:flex;gap:10px;margin:8px 0}
+.k{min-width:120px;opacity:.8}
+.v{flex:1}
 
-  rainRunning = true;
-  function loop(){
-    if(!rainRunning) return;
+.shieldBig{
+  font-size:44px;
+  filter: drop-shadow(0 6px 18px rgba(47,125,255,.25));
+}
 
-    ctx.clearRect(0,0,rainCanvas.width,rainCanvas.height);
-    ctx.lineWidth = 1.2;
+.pill{
+  display:inline-block;
+  font-size:13px;
+  opacity:.9;
+  padding:6px 10px;
+  border-radius:999px;
+  background:rgba(255,255,255,.08);
+  border:1px solid rgba(255,255,255,.10);
+  margin:2px 0 10px;
+}
 
-    for(const d of drops){
-      ctx.strokeStyle = `rgba(200,220,255,${d.a})`;
-      ctx.beginPath();
-      ctx.moveTo(d.x, d.y);
-      ctx.lineTo(d.x, d.y + d.len);
-      ctx.stroke();
+.q-title{font-weight:900;margin-bottom:10px}
 
-      d.y += d.spd;
-      d.x += 1.2; // 바람 느낌
-      if(d.y > rainCanvas.height) {
-        d.y = -d.len;
-        d.x = Math.random()*rainCanvas.width;
-      }
-      if(d.x > rainCanvas.width) d.x = 0;
-    }
+.opt{
+  display:flex; gap:10px; align-items:flex-start;
+  padding:10px 12px; border-radius:12px;
+  background:rgba(255,255,255,.06);
+  border:1px solid rgba(255,255,255,.10);
+  margin:8px 0;
+}
+.opt input{margin-top:2px}
 
-    requestAnimationFrame(loop);
-  }
-  requestAnimationFrame(loop);
+.feedback{
+  margin-top:10px;
+  min-height:22px;
+  font-weight:900;
+}
+.feedback.ok{color:#7CFF9A}
+.feedback.bad{color:#FF7C7C}
 
-  window.addEventListener("resize", resizeCanvas);
-  function resizeCanvas(){
-    rainCanvas.width = window.innerWidth * devicePixelRatio;
-    rainCanvas.height = window.innerHeight * devicePixelRatio;
-    rainCanvas.style.width = window.innerWidth + "px";
-    rainCanvas.style.height = window.innerHeight + "px";
-    ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
-  }
+.reward-card{text-align:center}
+.rewardShield{
+  font-size:70px;
+  margin:8px 0 6px;
+  animation: pop 650ms ease-out both;
+}
+@keyframes pop{
+  0%{transform:scale(.2); opacity:0}
+  70%{transform:scale(1.18); opacity:1}
+  100%{transform:scale(1); opacity:1}
 }
