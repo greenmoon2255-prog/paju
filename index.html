@@ -4,26 +4,30 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
   <title>운정호수 폭우 AR 미션</title>
+
   <style>
     :root{
       --bg:#0b1020; --panel:rgba(0,0,0,.65); --text:#f5f7ff;
       --red:#ff3b30; --blue:#2f7dff; --ok:#7CFF9A; --bad:#FF7C7C;
     }
     *{box-sizing:border-box}
-    body{margin:0; overflow:hidden; background:var(--bg); color:var(--text);
-      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+    body{
+      margin:0; overflow:hidden; background:var(--bg); color:var(--text);
+      font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    }
 
     .stage{position:fixed; inset:0; display:none; align-items:center; justify-content:center}
     .stage.active{display:flex}
 
     .panel{
-      width:min(640px,92vw);
+      width:min(680px,92vw);
       padding:18px 16px;
       border-radius:18px;
       background:var(--panel);
       backdrop-filter: blur(10px);
       border:1px solid rgba(255,255,255,.12);
     }
+
     .warning{border:1px solid rgba(255,59,48,.35)}
     .blink-dot{
       width:10px;height:10px;border-radius:50%;
@@ -50,6 +54,7 @@
     }
     .primary{background:rgba(47,125,255,.95);color:#fff}
     .ghost{background:rgba(255,255,255,.10);color:#fff}
+    button:disabled{opacity:.45;cursor:not-allowed}
 
     .footer-hint{
       position:fixed; bottom:14px; left:0; right:0;
@@ -69,18 +74,73 @@
       width:100%; height:100%;
       pointer-events:none;
     }
+
+    /* (1) 수위 상승 표현 강화: 더 진한 파란 물 + 화면 절반 이상까지 */
     #water{
       position:fixed; left:0; right:0; bottom:0;
       height:0%;
-      background:linear-gradient(to top, rgba(47,125,255,.62), rgba(47,125,255,.22), rgba(47,125,255,0));
       pointer-events:none;
-      transition:height 7s linear;
+
+      /* 진하고 선명한 물 레이어 */
+      background:
+        radial-gradient(1200px 260px at 50% 0%, rgba(255,255,255,.22), rgba(255,255,255,0) 65%),
+        linear-gradient(to top,
+          rgba(10,60,255,.92),
+          rgba(0,155,255,.78) 55%,
+          rgba(0,170,255,.50) 78%,
+          rgba(0,170,255,.22) 92%,
+          rgba(0,170,255,0) 100%
+        );
+
+      /* 물 느낌을 더 강하게 */
+      filter: saturate(1.2) contrast(1.1);
+      box-shadow: 0 -18px 50px rgba(0,140,255,.35) inset;
+
+      transition:height 6s linear;
     }
-    .water-text{
-      position:absolute; left:16px; top:14px;
+
+    /* 물 표면(상단 가장자리) 라인 + 살짝 출렁임 */
+    #water::before{
+      content:"";
+      position:absolute; left:-10%; right:-10%; top:-18px;
+      height:28px;
+      background: linear-gradient(to bottom, rgba(255,255,255,.40), rgba(255,255,255,0));
+      opacity:.85;
+      filter: blur(1px);
+      animation: surface 1.2s ease-in-out infinite;
+    }
+    @keyframes surface{
+      0%,100%{transform:translateX(0)}
+      50%{transform:translateX(18px)}
+    }
+
+    /* (2) 경고 문구는 나중에 등장 + 3배 이상 크게 + 빨간색 */
+    #waterText{
+      position:absolute;
+      left:16px;
+      right:16px;
+      top:22px;
+
+      font-size:48px;           /* 크게 */
       font-weight:950;
-      text-shadow:0 2px 10px rgba(0,0,0,.55);
+      color:var(--red);         /* 빨간색 */
+      letter-spacing:-0.02em;
+      line-height:1.1;
+
+      text-shadow:
+        0 2px 0 rgba(0,0,0,.55),
+        0 10px 24px rgba(0,0,0,.55);
+
+      opacity:0;
+      transform: translateY(-10px) scale(0.98);
+      transition: opacity 240ms ease, transform 240ms ease;
+      pointer-events:none;
     }
+    #waterText.show{
+      opacity:1;
+      transform: translateY(0) scale(1);
+    }
+
     .hud{
       position:fixed; top:12px; left:12px;
       background:rgba(0,0,0,.45);
@@ -96,472 +156,3 @@
     .modal{
       position:fixed; inset:0;
       display:none; align-items:center; justify-content:center;
-      background:rgba(0,0,0,.45);
-      backdrop-filter: blur(6px);
-    }
-    .modal.open{display:flex}
-    .modal-card{
-      width:min(680px,92vw);
-      border-radius:18px;
-      padding:16px 16px 14px;
-      background:rgba(15,18,30,.92);
-      border:1px solid rgba(255,255,255,.12);
-    }
-    .modal-title{font-size:18px;font-weight:950;margin:6px 0 10px}
-    .modal-body{opacity:.95;line-height:1.55}
-    .row{display:flex;gap:10px;margin:8px 0}
-    .k{min-width:120px;opacity:.8}
-    .v{flex:1}
-
-    .shieldBig{font-size:46px; filter:drop-shadow(0 6px 18px rgba(47,125,255,.25));}
-
-    /* 퀴즈 */
-    .pill{
-      display:inline-block;font-size:13px;opacity:.9;
-      padding:6px 10px;border-radius:999px;
-      background:rgba(255,255,255,.08);
-      border:1px solid rgba(255,255,255,.10);
-      margin:2px 0 10px;
-    }
-    .q-title{font-weight:950;margin-bottom:10px}
-    .opt{
-      display:flex; gap:10px; align-items:flex-start;
-      padding:10px 12px; border-radius:12px;
-      background:rgba(255,255,255,.06);
-      border:1px solid rgba(255,255,255,.10);
-      margin:8px 0;
-    }
-    .opt input{margin-top:2px}
-    .feedback{margin-top:10px;min-height:22px;font-weight:950}
-    .feedback.ok{color:var(--ok)}
-    .feedback.bad{color:var(--bad)}
-
-    /* 보상/완료 */
-    .reward-card{text-align:center}
-    .rewardShield{font-size:74px;margin:8px 0 6px;animation:pop 650ms ease-out both}
-    @keyframes pop{0%{transform:scale(.2);opacity:0}70%{transform:scale(1.18);opacity:1}100%{transform:scale(1);opacity:1}}
-
-    /* 오류 안내 바 */
-    #errorBar{
-      position:fixed; left:10px; right:10px; bottom:10px;
-      display:none;
-      background:rgba(255,59,48,.20);
-      border:1px solid rgba(255,59,48,.45);
-      border-radius:14px;
-      padding:12px 12px;
-      line-height:1.45;
-      backdrop-filter: blur(8px);
-    }
-    #errorBar.show{display:block}
-    #errorTitle{font-weight:950}
-    #errorMsg{opacity:.95;margin-top:4px}
-  </style>
-</head>
-
-<body>
-  <!-- 1단계 -->
-  <section id="stage1" class="stage active">
-    <div class="panel warning">
-      <div class="blink-dot"></div>
-      <div class="warning-title">WARNING</div>
-      <div class="warning-msg">집중호우 시뮬레이션 가동</div>
-      <div class="sub">
-        아래 버튼을 누르면 카메라 화면 위에 <b>훨씬 강한 폭우</b>가 나타납니다.<br/>
-        검은 화면이 나오면, 대부분 “인앱 브라우저” 또는 “카메라 권한” 문제입니다.
-      </div>
-
-      <button id="startBtn" class="primary" type="button">스캐너 시작 (카메라 허용)</button>
-      <button id="retryBtn" class="ghost" type="button">문제가 있으면 다시 시도</button>
-    </div>
-
-    <div class="footer-hint">가능하면 Safari/Chrome에서 실행하세요. (카카오/네이버 인앱 브라우저는 실패율이 높습니다)</div>
-  </section>
-
-  <!-- 2단계 -->
-  <section id="stage2" class="stage">
-    <video id="cam" playsinline muted autoplay></video>
-    <canvas id="rain"></canvas>
-    <div id="water"><div id="waterText" class="water-text">수위 상승… 산책로 침수 위험!</div></div>
-
-    <div class="hud">
-      <div class="hud-title">[시뮬레이션] 시간당 100mm 폭우</div>
-      <div id="timer" class="hud-sub">00:00</div>
-    </div>
-  </section>
-
-  <!-- 진단 -->
-  <div id="diagnosis" class="modal">
-    <div class="modal-card">
-      <div class="shieldBig">🛡️</div>
-      <div class="modal-title">[시스템 진단 결과]</div>
-      <div class="modal-body">
-        <div class="row"><span class="k">상황</span><span class="v">시간당 100mm 기록적 폭우 발생!</span></div>
-        <div class="row"><span class="k">운정호수 상태</span><span class="v">빗물 <b id="retentionText">약 32만 톤</b> 저류 성공! (스펀지 모드 작동 중)</span></div>
-        <div class="row"><span class="k">결과</span><span class="v">주변 침수 방어 완료. <b>안전합니다.</b></span></div>
-      </div>
-      <button id="quizBtn" class="primary" type="button">퀴즈하기 (복불복 1문항)</button>
-      <button id="closeDiagnosisBtn" class="ghost" type="button">닫기</button>
-    </div>
-  </div>
-
-  <!-- 퀴즈 -->
-  <div id="quiz" class="modal">
-    <div class="modal-card">
-      <div class="modal-title">그린인프라 퀴즈</div>
-      <div class="pill">문항/보기는 랜덤입니다.</div>
-
-      <form id="quizForm">
-        <div class="modal-body">
-          <div id="qTitle" class="q-title">문제 로딩 중…</div>
-          <div id="options"></div>
-          <div id="quizFeedback" class="feedback"></div>
-        </div>
-
-        <button class="primary" type="submit">제출</button>
-        <button id="closeQuizBtn" class="ghost" type="button">닫기</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- 보상 -->
-  <div id="reward" class="modal">
-    <div class="modal-card reward-card">
-      <div class="rewardShield">🛡️</div>
-      <div class="modal-title">방패 획득!</div>
-      <div id="rewardMsg" class="modal-body">정답! 그린인프라는 빗물을 천천히 모으고 스며들게 합니다.</div>
-      <button id="rewardOkBtn" class="primary" type="button">완료</button>
-    </div>
-  </div>
-
-  <!-- 완료 -->
-  <section id="stageDone" class="stage">
-    <div class="panel">
-      <div style="font-weight:950;font-size:20px;">미션 완료 ✅</div>
-      <div style="opacity:.9;margin-top:8px;line-height:1.55;">
-        방패를 획득했습니다.<br/>이 창(탭)을 닫고 다음 활동으로 이동하세요.
-      </div>
-      <button id="doneBtn" class="primary" type="button">종료 안내</button>
-      <button id="restartBtn" class="ghost" type="button">(교사용) 다시 시작</button>
-    </div>
-    <div class="footer-hint">웹페이지는 보안 정책상 버튼으로 탭을 강제 종료하기 어렵습니다.</div>
-  </section>
-
-  <!-- 오류 바 -->
-  <div id="errorBar" role="status" aria-live="polite">
-    <div id="errorTitle">실행이 막혔습니다</div>
-    <div id="errorMsg"></div>
-  </div>
-
-  <script>
-    // ===== 설정 =====
-    const CONFIG = { floodSeconds: 7, diagnoseAtSeconds: 9 };
-
-    // ===== DOM =====
-    const stage1 = document.getElementById("stage1");
-    const stage2 = document.getElementById("stage2");
-    const stageDone = document.getElementById("stageDone");
-
-    const startBtn = document.getElementById("startBtn");
-    const retryBtn = document.getElementById("retryBtn");
-
-    const cam = document.getElementById("cam");
-    const rainCanvas = document.getElementById("rain");
-    const water = document.getElementById("water");
-    const timerEl = document.getElementById("timer");
-
-    const diagnosis = document.getElementById("diagnosis");
-    const retentionText = document.getElementById("retentionText");
-    const quizBtn = document.getElementById("quizBtn");
-    const closeDiagnosisBtn = document.getElementById("closeDiagnosisBtn");
-
-    const quiz = document.getElementById("quiz");
-    const quizForm = document.getElementById("quizForm");
-    const qTitle = document.getElementById("qTitle");
-    const optionsBox = document.getElementById("options");
-    const quizFeedback = document.getElementById("quizFeedback");
-    const closeQuizBtn = document.getElementById("closeQuizBtn");
-
-    const reward = document.getElementById("reward");
-    const rewardMsg = document.getElementById("rewardMsg");
-    const rewardOkBtn = document.getElementById("rewardOkBtn");
-
-    const doneBtn = document.getElementById("doneBtn");
-    const restartBtn = document.getElementById("restartBtn");
-
-    const errorBar = document.getElementById("errorBar");
-    const errorMsg = document.getElementById("errorMsg");
-
-    // ===== 랜덤 =====
-    const pickOne = (arr)=>arr[Math.floor(Math.random()*arr.length)];
-    const shuffle = (arr)=>{
-      const a=[...arr];
-      for(let i=a.length-1;i>0;i--){
-        const j=Math.floor(Math.random()*(i+1));
-        [a[i],a[j]]=[a[j],a[i]];
-      }
-      return a;
-    };
-
-    const RETENTION_VARIANTS = ["약 35만 톤","약 32만 톤","약 30만 톤","약 28만 톤"];
-    const REWARD_MESSAGES = [
-      "정답! 그린인프라는 빗물을 ‘천천히’ 모으고 스며들게 합니다.",
-      "좋아요. ‘저류·침투·지연’이 홍수 위험을 줄입니다.",
-      "멋집니다. 빗물정원·투수블록·식생수로가 이런 역할을 합니다."
-    ];
-    const QUESTION_BANK = [
-      {
-        q: "도시에서 비가 오면 물이 빨리 넘치는 가장 큰 이유는?",
-        options: ["비가 더러워서","콘크리트·아스팔트가 많아 스며들 틈이 적어서","바람이 많이 불어서","나무가 너무 많아서"],
-        correct:"콘크리트·아스팔트가 많아 스며들 틈이 적어서",
-        ok:"정답! 스며들 틈이 없으면 빗물이 한꺼번에 몰려요.",
-        bad:"오답이에요. 핵심은 ‘스며들 틈(침투)’입니다."
-      },
-      {
-        q: "그린인프라에 가장 가까운 것은?",
-        options:["빗물을 바로 하수관으로 보내는 큰 관","빗물정원처럼 물을 모아 스며들게 하는 공간","비가 오면 켜지는 사이렌","주차장을 더 단단하게 포장하기"],
-        correct:"빗물정원처럼 물을 모아 스며들게 하는 공간",
-        ok:"정답! 현장에서 저류·침투로 부담을 줄입니다.",
-        bad:"오답이에요. 물을 모아두고 스며들게 하는 게 핵심입니다."
-      }
-    ];
-
-    // ===== 유틸 =====
-    function showStage(el){
-      stage1.classList.remove("active");
-      stage2.classList.remove("active");
-      stageDone.classList.remove("active");
-      el.classList.add("active");
-    }
-    function showError(text){
-      errorMsg.textContent = text;
-      errorBar.classList.add("show");
-      // 6초 뒤 자동 숨김(너무 거슬리지 않게)
-      setTimeout(()=>errorBar.classList.remove("show"), 6000);
-    }
-
-    // ===== 카메라 =====
-    async function startCamera(){
-      if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-        throw new Error("이 브라우저는 카메라 기능을 지원하지 않습니다.");
-      }
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video:{facingMode:"environment"},
-        audio:false
-      });
-      cam.srcObject = stream;
-      await cam.play();
-    }
-    function stopCamera(){
-      try{
-        const s = cam.srcObject;
-        if(s && s.getTracks) s.getTracks().forEach(t=>t.stop());
-        cam.srcObject = null;
-      }catch(e){}
-    }
-
-    // ===== 타이머 =====
-    let timerHandle=null;
-    function startTimer(){
-      const t0=Date.now();
-      timerEl.textContent="00:00";
-      timerHandle=setInterval(()=>{
-        const sec=Math.floor((Date.now()-t0)/1000);
-        const mm=String(Math.floor(sec/60)).padStart(2,"0");
-        const ss=String(sec%60).padStart(2,"0");
-        timerEl.textContent=`${mm}:${ss}`;
-      },250);
-    }
-    function stopTimer(){
-      if(timerHandle) clearInterval(timerHandle);
-      timerHandle=null;
-    }
-
-    // ===== 물 =====
-    function startWaterRise(){
-      water.style.transition=`height ${CONFIG.floodSeconds}s linear`;
-      water.style.height="55%";
-    }
-    function resetWater(){
-      water.style.transition="none";
-      water.style.height="0%";
-    }
-
-    // ===== 폭우(강화 버전) =====
-    let rainRunning=false;
-    let rafId=null;
-    function startRainStrong(){
-      const ctx = rainCanvas.getContext("2d");
-
-      function resize(){
-        const dpr = window.devicePixelRatio || 1;
-        rainCanvas.width = Math.floor(innerWidth*dpr);
-        rainCanvas.height = Math.floor(innerHeight*dpr);
-        rainCanvas.style.width = innerWidth+"px";
-        rainCanvas.style.height = innerHeight+"px";
-        ctx.setTransform(dpr,0,0,dpr,0,0);
-      }
-      resize();
-      window.addEventListener("resize", resize);
-
-      // ✅ 훨씬 강한 비: 밀도↑, 두께↑, 길이↑, 밝기↑
-      const drops=[];
-      const COUNT = 700;
-      for(let i=0;i<COUNT;i++){
-        drops.push({
-          x: Math.random()*innerWidth,
-          y: Math.random()*innerHeight,
-          len: 18 + Math.random()*55,
-          spd: 28 + Math.random()*55,
-          a: 0.55 + Math.random()*0.40,
-          w: 1.6 + Math.random()*1.6
-        });
-      }
-
-      rainRunning=true;
-      const loop=()=>{
-        if(!rainRunning) return;
-        ctx.clearRect(0,0,innerWidth,innerHeight);
-
-        // 번개 같은 "폭우 커튼" 느낌 살짝 추가
-        ctx.fillStyle = "rgba(210,230,255,0.05)";
-        ctx.fillRect(0,0,innerWidth,innerHeight);
-
-        for(const d of drops){
-          ctx.lineWidth = d.w;
-          ctx.strokeStyle = `rgba(245,250,255,${d.a})`;
-          ctx.beginPath();
-          ctx.moveTo(d.x, d.y);
-          ctx.lineTo(d.x + 2.2, d.y + d.len);
-          ctx.stroke();
-
-          d.y += d.spd;
-          d.x += 3.6;
-          if(d.y > innerHeight){ d.y = -d.len; d.x = Math.random()*innerWidth; }
-          if(d.x > innerWidth) d.x = 0;
-        }
-        rafId = requestAnimationFrame(loop);
-      };
-      loop();
-    }
-    function stopRain(){
-      rainRunning=false;
-      if(rafId) cancelAnimationFrame(rafId);
-      rafId=null;
-      const ctx=rainCanvas.getContext("2d");
-      ctx.clearRect(0,0,innerWidth,innerHeight);
-    }
-
-    // ===== 시뮬레이션 시작 =====
-    async function startSimulation(){
-      errorBar.classList.remove("show");
-      try{
-        await startCamera();
-      }catch(e){
-        showError(
-          "카메라가 열리지 않았습니다. " +
-          "Safari/Chrome에서 열고 카메라 권한을 허용해 주세요. " +
-          "(인앱 브라우저에서는 종종 막힙니다)\n\n" +
-          "오류: " + (e.message || e)
-        );
-        return;
-      }
-
-      showStage(stage2);
-      resetWater();
-      startRainStrong();
-      startTimer();
-      startWaterRise();
-
-      setTimeout(()=>{
-        retentionText.textContent = pickOne(RETENTION_VARIANTS);
-        diagnosis.classList.add("open");
-      }, CONFIG.diagnoseAtSeconds*1000);
-    }
-
-    startBtn.addEventListener("click", startSimulation);
-    retryBtn.addEventListener("click", startSimulation);
-
-    // ===== 진단/퀴즈 =====
-    closeDiagnosisBtn.addEventListener("click", ()=> diagnosis.classList.remove("open"));
-
-    let currentQuestion=null;
-    function renderQuestion(){
-      currentQuestion = pickOne(QUESTION_BANK);
-      const opts = shuffle(currentQuestion.options);
-      qTitle.textContent = currentQuestion.q;
-      optionsBox.innerHTML="";
-      quizFeedback.textContent="";
-      quizFeedback.className="feedback";
-
-      opts.forEach((txt, idx)=>{
-        const label=document.createElement("label");
-        label.className="opt";
-        const input=document.createElement("input");
-        input.type="radio"; input.name="q"; input.value=txt;
-        const span=document.createElement("span");
-        span.textContent=txt;
-        label.appendChild(input); label.appendChild(span);
-        optionsBox.appendChild(label);
-      });
-    }
-
-    quizBtn.addEventListener("click", ()=>{
-      diagnosis.classList.remove("open");
-      renderQuestion();
-      quiz.classList.add("open");
-    });
-
-    closeQuizBtn.addEventListener("click", ()=> quiz.classList.remove("open"));
-
-    quizForm.addEventListener("submit", (e)=>{
-      e.preventDefault();
-      const picked = quizForm.querySelector('input[name="q"]:checked');
-      if(!picked){
-        quizFeedback.textContent="정답을 하나 선택해 주세요.";
-        quizFeedback.className="feedback bad";
-        return;
-      }
-      const ok = picked.value === currentQuestion.correct;
-      if(ok){
-        quizFeedback.textContent=currentQuestion.ok;
-        quizFeedback.className="feedback ok";
-        setTimeout(()=>{
-          quiz.classList.remove("open");
-          rewardMsg.textContent = pickOne(REWARD_MESSAGES);
-          reward.classList.add("open");
-        },450);
-      }else{
-        quizFeedback.textContent=currentQuestion.bad;
-        quizFeedback.className="feedback bad";
-      }
-    });
-
-    // ===== 보상 → 종료 =====
-    rewardOkBtn.addEventListener("click", ()=>{
-      reward.classList.remove("open");
-      diagnosis.classList.remove("open");
-      quiz.classList.remove("open");
-      stopRain();
-      stopTimer();
-      stopCamera();
-      resetWater();
-      showStage(stageDone);
-    });
-
-    doneBtn.addEventListener("click", ()=>{
-      alert("미션이 종료되었습니다. 이 창(탭)을 닫고 다음 활동으로 이동해 주세요.");
-    });
-
-    restartBtn.addEventListener("click", ()=>{
-      reward.classList.remove("open");
-      diagnosis.classList.remove("open");
-      quiz.classList.remove("open");
-      stopRain();
-      stopTimer();
-      stopCamera();
-      resetWater();
-      showStage(stage1);
-    });
-  </script>
-</body>
-</html>
